@@ -6,10 +6,16 @@ license = "MIT"
 homepage = "https://github.com/mdlayher/smbios-rs"
 repository = "https://github.com/mdlayher/smbios-rs"
 documentation = "https://docs.rs/smbios"
+keywords = ["smbios", "dmi"]
+categories = ["os"]
 description = """
 Provides detection and access to System Management BIOS (SMBIOS) and
 Desktop Management Interface (DMI) data and structures.
 """
+
+[badges]
+travis-ci = { repository = "mdlayher/smbios-rs" }
+maintenance = { status = "experimental" }
 
 [dependencies]
 byteorder = "1.2.6"
