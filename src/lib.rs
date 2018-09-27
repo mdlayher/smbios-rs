@@ -182,8 +182,12 @@ fn parse_entry_point<T: Read>(mut stream: T) -> io::Result<EntryPointType> {
 /// Possible entry point types and their contained structures.
 #[derive(Debug)]
 pub enum EntryPointType {
-    Unknown,        // Unknown entry point.
-    Bits64(Bits64), // 64-bit entry point.
+    /// An unknown entry point.  Returned when no valid entry point is
+    /// recognized by this library.
+    Unknown,
+
+    /// A 64-bit entry point.
+    Bits64(Bits64),
 }
 
 impl EntryPoint for Bits64 {
@@ -206,15 +210,15 @@ impl EntryPoint for Bits64 {
 /// Contains the information found in a 64-bit SMBIOS entry point.
 #[derive(Debug, PartialEq)]
 pub struct Bits64 {
-    checksum: u8,
-    length: u8,
-    major: u8,
-    minor: u8,
-    revision: u8,
-    entry_point_revision: u8,
-    reserved: u8,
-    structure_table_max_size: u32,
-    structure_table_address: u64,
+    pub checksum: u8,
+    pub length: u8,
+    pub major: u8,
+    pub minor: u8,
+    pub revision: u8,
+    pub entry_point_revision: u8,
+    pub reserved: u8,
+    pub structure_table_max_size: u32,
+    pub structure_table_address: u64,
 }
 
 fn parse_64bit(buf: &[u8]) -> io::Result<Bits64> {

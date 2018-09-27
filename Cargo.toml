@@ -1,6 +1,6 @@
 [package]
 name = "smbios"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Matt Layher <mdlayher@gmail.com>"]
 license = "MIT"
 homepage = "https://github.com/mdlayher/smbios-rs"
