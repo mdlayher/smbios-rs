@@ -1,0 +1,16 @@
+[package]
+name = "smbios"
+version = "0.1.0"
+authors = ["Matt Layher <mdlayher@gmail.com>"]
+license = "MIT"
+homepage = ""
+repository = "https://github.com/mdlayher/smbios-rs"
+documentation = "https://docs.rs/smbios"
+description = """
+Provides detection and access to System Management BIOS (SMBIOS) and
+Desktop Management Interface (DMI) data and structures.
+"""
+
+[dependencies]
+byteorder = "1.2.6"
+bytes = "0.4.10"
