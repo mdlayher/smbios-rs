@@ -355,7 +355,7 @@ mod tests {
 
     #[test]
     fn decode_structure_header_only_ok() {
-        let got = unwrap_structure(vec![127, 0x04, 0x01, 0x00, 0x00, 0x00]);
+        let got = unwrap_structure(&[127, 0x04, 0x01, 0x00, 0x00, 0x00]);
 
         let want = Structure {
             header: Header {
@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn decode_structure_no_strings_ok() {
-        let got = unwrap_structure(vec![127, 0x06, 0x01, 0x00, 0x01, 0x02, 0x00, 0x00]);
+        let got = unwrap_structure(&[127, 0x06, 0x01, 0x00, 0x01, 0x02, 0x00, 0x00]);
 
         let want = Structure {
             header: Header {
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn decode_structure_all_ok() {
-        let got = unwrap_structure(vec![
+        let got = unwrap_structure(&[
             127, 0x06, 0x01, 0x00, 0x01, 0x02, b'a', b'b', b'c', b'd', 0x00, b'1', b'2', b'3',
             b'4', 0x00, 0x00,
         ]);
@@ -412,7 +412,7 @@ mod tests {
         // Thanks, reddit user coder543!
         // https://old.reddit.com/r/rust/comments/9jhbtw/rustfmts_handling_of_long_vec_literals/e6rh1uo/
         #[cfg_attr(rustfmt, rustfmt_skip)]
-        let got = unwrap_structures(vec![
+        let got = unwrap_structures(&[
             0x00, 0x05, 0x01, 0x00,
             0xff,
             0x00,
@@ -463,7 +463,7 @@ mod tests {
         assert_eq!(want, got);
     }
 
-    fn unwrap_structure(buf: Vec<u8>) -> Structure {
+    fn unwrap_structure(buf: &[u8]) -> Structure {
         let mut structures = unwrap_structures(buf);
         if structures.len() != 1 {
             panic!("only expected one structure");
@@ -472,7 +472,7 @@ mod tests {
         structures.pop().unwrap()
     }
 
-    fn unwrap_structures(buf: Vec<u8>) -> Vec<Structure> {
+    fn unwrap_structures(buf: &[u8]) -> Vec<Structure> {
         let cursor = io::Cursor::new(buf);
 
         let mut decoder = Decoder::new(cursor);
