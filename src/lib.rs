@@ -4,10 +4,77 @@
 extern crate bytes;
 
 use bytes::Buf;
+use std::error;
+use std::fmt;
 use std::fs;
 use std::io;
 use std::io::prelude::*;
 use std::path;
+use std::result;
+use std::string;
+
+/// Specifies the different classes of errors which may occur.
+#[derive(Debug)]
+pub enum Error {
+    /// Indicates an error when converting bytes into a UTF-8 string.
+    FromUtf8(string::FromUtf8Error),
+
+    /// Indicates an error occurred while performing file I/O.
+    Io(io::Error),
+
+    /// Indicates an error produced by this library.
+    Internal(ErrorKind),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Error::FromUtf8(ref err) => write!(f, "from UTF8 error: {}", err),
+            Error::Io(ref err) => write!(f, "IO error: {}", err),
+            Error::Internal(ref err) => write!(f, "internal SMBIOS error: {}", err),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn cause(&self) -> Option<&error::Error> {
+        match *self {
+            Error::FromUtf8(ref err) => Some(err),
+            Error::Io(ref err) => Some(err),
+            Error::Internal(ref err) => Some(err),
+        }
+    }
+}
+
+/// Specifies certain internal error conditions which may occur when dealing
+/// with SMBIOS data.
+#[derive(Debug)]
+pub enum ErrorKind {
+    /// No SMBIOS entry point was detected.
+    EntryPointNotFound,
+
+    /// An SMBIOS entry point was detected, but it could not be successfully
+    /// parsed.
+    InvalidEntryPoint,
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ErrorKind::EntryPointNotFound => write!(f, "entry point not found"),
+            ErrorKind::InvalidEntryPoint => write!(f, "invalid entry point"),
+        }
+    }
+}
+
+impl error::Error for ErrorKind {
+    fn cause(&self) -> Option<&error::Error> {
+        None
+    }
+}
+
+/// A Result type specialized use with for an Error.
+type Result<T> = result::Result<T, Error>;
 
 /// Provides access to common information for SMBIOS entry points, including the
 /// SMBIOS version in use and the location and size of the SMBIOS table in
@@ -36,18 +103,18 @@ impl<T: Read> Decoder<T> {
     }
 
     /// Decodes a vector of SMBIOS structures from the Decoder's stream.
-    pub fn decode(&mut self) -> io::Result<Vec<Structure>> {
+    pub fn decode(&mut self) -> Result<Vec<Structure>> {
         let mut structures = Vec::new();
 
         // Header always occupies 4 bytes.
         let mut header_buf = [0; 4];
         loop {
-            self.stream.read_exact(&mut header_buf)?;
+            self.stream.read_exact(&mut header_buf).map_err(Error::Io)?;
             let header = parse_header(header_buf);
 
             // Formatted section is indicated length minus size of the header.
             let mut formatted = vec![0; header.length as usize - 4];
-            self.stream.read_exact(&mut formatted)?;
+            self.stream.read_exact(&mut formatted).map_err(Error::Io)?;
 
             let strings = self.parse_strings()?;
 
@@ -66,13 +133,13 @@ impl<T: Read> Decoder<T> {
         }
     }
 
-    fn parse_strings(&mut self) -> io::Result<Vec<String>> {
+    fn parse_strings(&mut self) -> Result<Vec<String>> {
         let mut strings = Vec::new();
 
         // It is possible for no strings to be presented; if so, two null bytes
         // will occur immediately and we return an empty vector.
         let mut prefix_buf = [0; 2];
-        self.stream.read_exact(&mut prefix_buf)?;
+        self.stream.read_exact(&mut prefix_buf).map_err(Error::Io)?;
 
         if prefix_buf == [0, 0] {
             return Ok(strings);
@@ -87,7 +154,9 @@ impl<T: Read> Decoder<T> {
 
             // From now on, we'll only use 1 byte of the prefix buffer.
             upper = 1;
-            self.stream.read_exact(&mut prefix_buf[0..upper])?;
+            self.stream
+                .read_exact(&mut prefix_buf[0..upper])
+                .map_err(Error::Io)?;
 
             // If we read a second null byte after parsing a string, end of
             // strings section.
@@ -97,10 +166,10 @@ impl<T: Read> Decoder<T> {
         }
     }
 
-    fn parse_string(&mut self, prefix: &mut [u8]) -> io::Result<String> {
+    fn parse_string(&mut self, prefix: &mut [u8]) -> Result<String> {
         // Each string is terminated with a null byte.
         let mut buf = Vec::new();
-        self.stream.read_until(0, &mut buf)?;
+        self.stream.read_until(0, &mut buf).map_err(Error::Io)?;
 
         // Remove the null byte from the string so it isn't parsed later.
         let i = buf.len() - 1;
@@ -112,7 +181,7 @@ impl<T: Read> Decoder<T> {
         string_vec.append(&mut buf);
 
         // TODO(mdlayher): don't unwrap, handle properly.
-        Ok(String::from_utf8(string_vec).unwrap())
+        Ok(String::from_utf8(string_vec).map_err(Error::FromUtf8)?)
     }
 }
 
@@ -125,18 +194,15 @@ const LINUX_SYSFS_ENTRY_POINT: &str = "/sys/firmware/dmi/tables/smbios_entry_poi
 /// Decoder type.
 // TODO(mdlayher): is this signature idiomatic?  Should this function just
 // decode the stream instead?
-pub fn stream() -> io::Result<(EntryPointType, Box<Read>)> {
+pub fn stream() -> Result<(EntryPointType, Box<Read>)> {
     // For now, we only support the standard Linux sysfs location.
     // TODO(mdlayher): read from /dev/mem as a fallback.
     if !path::Path::new(LINUX_SYSFS_ENTRY_POINT).exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "entry point not found",
-        ));
+        return Err(Error::Internal(ErrorKind::EntryPointNotFound));
     }
 
-    let entry_point = fs::File::open(LINUX_SYSFS_ENTRY_POINT)?;
-    let dmi = fs::File::open(LINUX_SYSFS_DMI)?;
+    let entry_point = fs::File::open(LINUX_SYSFS_ENTRY_POINT).map_err(Error::Io)?;
+    let dmi = fs::File::open(LINUX_SYSFS_DMI).map_err(Error::Io)?;
 
     Ok((parse_entry_point(entry_point)?, Box::new(dmi)))
 }
@@ -167,10 +233,10 @@ pub struct Structure {
     pub strings: Vec<String>,
 }
 
-fn parse_entry_point<T: Read>(mut stream: T) -> io::Result<EntryPointType> {
+fn parse_entry_point<T: Read>(mut stream: T) -> Result<EntryPointType> {
     // The entry point should be smaller than 64 bytes.
     let mut buf = [0; 64];
-    let n = stream.read(&mut buf)?;
+    let n = stream.read(&mut buf).map_err(Error::Io)?;
 
     Ok(match buf[0..5] {
         // 64-bit entry point.
@@ -221,14 +287,10 @@ pub struct Bits64 {
     pub structure_table_address: u64,
 }
 
-fn parse_64bit(buf: &[u8]) -> io::Result<Bits64> {
+fn parse_64bit(buf: &[u8]) -> Result<Bits64> {
     // Could potentially contain more data if we're reading from /dev/mem.
     if buf.len() < 24 {
-        // TODO(mdlayher): our own error types.
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "not enough data for 64-bit entry point",
-        ));
+        return Err(Error::Internal(ErrorKind::InvalidEntryPoint));
     }
 
     let mut cursor = io::Cursor::new(buf);
