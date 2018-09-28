@@ -74,7 +74,7 @@ impl error::Error for ErrorKind {
 }
 
 /// A Result type specialized use with for an Error.
-type Result<T> = result::Result<T, Error>;
+pub type Result<T> = result::Result<T, Error>;
 
 /// Provides access to common information for SMBIOS entry points, including the
 /// SMBIOS version in use and the location and size of the SMBIOS table in
