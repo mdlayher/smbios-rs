@@ -420,7 +420,6 @@ mod tests {
 
         match entry_point {
             EntryPointType::Bits32(got) => {
-                println!("{:?}", got);
                 let want = Bits32 {
                     checksum: 164,
                     length: 31,
