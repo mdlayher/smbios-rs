@@ -239,6 +239,8 @@ fn parse_entry_point<T: Read>(mut stream: T) -> Result<EntryPointType> {
     let n = stream.read(&mut buf).map_err(Error::Io)?;
 
     Ok(match buf[0..5] {
+        // 32-bit entry point.
+        [b'_', b'S', b'M', b'_', _] => EntryPointType::Bits32(parse_32bit(&buf[0..n])?),
         // 64-bit entry point.
         [b'_', b'S', b'M', b'3', b'_'] => EntryPointType::Bits64(parse_64bit(&buf[0..n])?),
         _ => EntryPointType::Unknown,
@@ -252,8 +254,87 @@ pub enum EntryPointType {
     /// recognized by this library.
     Unknown,
 
+    /// A 32-bit entry point.
+    Bits32(Bits32),
+
     /// A 64-bit entry point.
     Bits64(Bits64),
+}
+
+impl EntryPoint for Bits32 {
+    fn table(&self) -> (usize, usize) {
+        (
+            self.structure_table_address as usize,
+            self.structure_table_length as usize,
+        )
+    }
+
+    fn version(&self) -> (usize, usize, usize) {
+        (self.major as usize, self.minor as usize, 0)
+    }
+}
+
+/// Contains the information found in a 32-bit SMBIOS entry point.
+#[derive(Debug, PartialEq)]
+pub struct Bits32 {
+    pub checksum: u8,
+    pub length: u8,
+    pub major: u8,
+    pub minor: u8,
+    pub max_structure_size: u16,
+    pub entry_point_revision: u8,
+    pub formatted_area: [u8; 5],
+    pub intermediate_checksum: u8,
+    pub structure_table_length: u16,
+    pub structure_table_address: u32,
+    pub number_structures: u16,
+    pub bcd_revision: u8,
+}
+
+fn parse_32bit(buf: &[u8]) -> Result<Bits32> {
+    // Could potentially contain more data if we're reading from /dev/mem.
+    if buf.len() < 31 {
+        return Err(Error::Internal(ErrorKind::InvalidEntryPoint));
+    }
+
+    let mut cursor = io::Cursor::new(buf);
+
+    // Skip the anchor string.
+    cursor.set_position(4);
+
+    let checksum = cursor.get_u8();
+    let length = cursor.get_u8();
+    let major = cursor.get_u8();
+    let minor = cursor.get_u8();
+    let max_structure_size = cursor.get_u16_le();
+    let entry_point_revision = cursor.get_u8();
+
+    let mut formatted_area = [0; 5];
+    cursor.read_exact(&mut formatted_area).map_err(Error::Io)?;
+
+    // Skip the intermediate anchor string.
+    cursor.set_position(21);
+
+    let intermediate_checksum = cursor.get_u8();
+    let structure_table_length = cursor.get_u16_le();
+    let structure_table_address = cursor.get_u32_le();
+    let number_structures = cursor.get_u16_le();
+    let bcd_revision = cursor.get_u8();
+
+    Ok(Bits32 {
+        checksum,
+        length,
+        major,
+        minor,
+        max_structure_size,
+        entry_point_revision,
+        formatted_area,
+        intermediate_checksum,
+        structure_table_length,
+        structure_table_address,
+        number_structures,
+        bcd_revision,
+    })
 }
 
 impl EntryPoint for Bits64 {
@@ -314,6 +395,61 @@ fn parse_64bit(buf: &[u8]) -> Result<Bits64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn entry_point_32bit_ok() {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        let cursor = io::Cursor::new(vec![
+            b'_', b'S', b'M', b'_',
+            0xa4,
+            0x1f,
+            0x2,
+            0x8,
+            0xd4,
+            0x1, 0x0,
+            0x0, 0x0, 0x0, 0x0, 0x0,
+            b'_', b'D', b'M', b'I', b'_',
+            0x95,
+            0x5f, 0xf,
+            0x0, 0x90, 0xf0, 0x7a,
+            0x43, 0x0,
+            0x28,
+        ]);
+
+        let entry_point = parse_entry_point(cursor).expect("expected valid 32-bit entry point");
+
+        match entry_point {
+            EntryPointType::Bits32(got) => {
+                println!("{:?}", got);
+                let want = Bits32 {
+                    checksum: 164,
+                    length: 31,
+                    major: 2,
+                    minor: 8,
+                    max_structure_size: 468,
+                    entry_point_revision: 0,
+                    formatted_area: [0, 0, 0, 0, 0],
+                    intermediate_checksum: 149,
+                    structure_table_length: 3935,
+                    structure_table_address: 2_062_585_856,
+                    number_structures: 67,
+                    bcd_revision: 40,
+                };
+
+                assert_eq!(want, got);
+                assert_eq!((2, 8, 0), got.version());
+                assert_eq!((2_062_585_856, 3935), got.table());
+            }
+            _ => panic!("invalid entry point type"),
+        }
+    }
+
+    #[test]
+    fn entry_point_32bit_bad() {
+        let cursor = io::Cursor::new(vec![b'_', b'S', b'M', b'_', 0xff]);
+
+        let _ = parse_entry_point(cursor).expect_err("expected invalid 32-bit entry point");
+    }
 
     #[test]
     fn entry_point_64bit_ok() {
