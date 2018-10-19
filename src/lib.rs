@@ -11,14 +11,10 @@ use std::io;
 use std::io::prelude::*;
 use std::path;
 use std::result;
-use std::string;
 
 /// Specifies the different classes of errors which may occur.
 #[derive(Debug)]
 pub enum Error {
-    /// Indicates an error when converting bytes into a UTF-8 string.
-    FromUtf8(string::FromUtf8Error),
-
     /// Indicates an error occurred while performing file I/O.
     Io(io::Error),
 
@@ -29,7 +25,6 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Error::FromUtf8(ref err) => write!(f, "from UTF8 error: {}", err),
             Error::Io(ref err) => write!(f, "IO error: {}", err),
             Error::Internal(ref err) => write!(f, "internal SMBIOS error: {}", err),
         }
@@ -39,7 +34,6 @@ impl fmt::Display for Error {
 impl error::Error for Error {
     fn cause(&self) -> Option<&error::Error> {
         match *self {
-            Error::FromUtf8(ref err) => Some(err),
             Error::Io(ref err) => Some(err),
             Error::Internal(ref err) => Some(err),
         }
@@ -180,8 +174,7 @@ impl<T: Read> Decoder<T> {
         let mut string_vec = prefix.to_vec();
         string_vec.append(&mut buf);
 
-        // TODO(mdlayher): don't unwrap, handle properly.
-        Ok(String::from_utf8(string_vec).map_err(Error::FromUtf8)?)
+        Ok(String::from_utf8_lossy(&string_vec).to_string())
     }
 }
 

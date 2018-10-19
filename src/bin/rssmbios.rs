@@ -2,14 +2,14 @@ extern crate byteorder;
 extern crate smbios;
 
 use byteorder::{ByteOrder, LE};
-use smbios::EntryPoint;
+use smbios::{EntryPoint, EntryPointType};
 
 fn main() -> Result<(), Box<std::error::Error>> {
     let (entry_point, stream) = smbios::stream()?;
 
     match entry_point {
-        smbios::EntryPointType::Bits32(ep) => show_entry_point(&ep),
-        smbios::EntryPointType::Bits64(ep) => show_entry_point(&ep),
+        EntryPointType::Bits32(ep) => show_entry_point(&ep),
+        EntryPointType::Bits64(ep) => show_entry_point(&ep),
         _ => {
             println!("unknown SMBIOS entry point type, continuing anyway");
         }
