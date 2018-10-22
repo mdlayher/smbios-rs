@@ -5,7 +5,7 @@ use byteorder::{ByteOrder, LE};
 use smbios::{EntryPoint, EntryPointType};
 
 fn main() -> Result<(), Box<std::error::Error>> {
-    let (entry_point, stream) = smbios::stream()?;
+    let (entry_point, structures) = smbios::stream()?;
 
     match entry_point {
         EntryPointType::Bits32(ep) => show_entry_point(&ep),
@@ -15,9 +15,6 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
     }
 
-    let mut decoder = smbios::Decoder::new(stream);
-
-    let structures = decoder.decode()?;
     for structure in structures {
         // Only look for DIMM information for this example.
         if structure.header.header_type != 17 {
@@ -31,9 +28,9 @@ fn main() -> Result<(), Box<std::error::Error>> {
         }
 
         let unit = if structure.formatted[9] & 0x80 == 0 {
-            "KB"
-        } else {
             "MB"
+        } else {
+            "KB"
         };
 
         println!("DIMM: {} {}", dimm_size, unit);

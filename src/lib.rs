@@ -179,25 +179,93 @@ impl<T: Read> Decoder<T> {
 }
 
 // Predetermined locations where SMBIOS information can be found.
+const DEV_MEM: &str = "/dev/mem";
 const LINUX_SYSFS_DMI: &str = "/sys/firmware/dmi/tables/DMI";
 const LINUX_SYSFS_ENTRY_POINT: &str = "/sys/firmware/dmi/tables/smbios_entry_point";
 
 /// Detects the entry point and location of an SMBIOS stream on this system,
-/// returning the entry point found and a stream which can be used with the
-/// Decoder type.
+/// returning the entry point found and all available SMBIOS structures.
 // TODO(mdlayher): is this signature idiomatic?  Should this function just
 // decode the stream instead?
-pub fn stream() -> Result<(EntryPointType, Box<Read>)> {
-    // For now, we only support the standard Linux sysfs location.
-    // TODO(mdlayher): read from /dev/mem as a fallback.
+pub fn stream() -> Result<(EntryPointType, Vec<Structure>)> {
+    // Try the standard Linux sysfs location.
+    // TODO(mdlayher): figure out cross-platform support.
     if !path::Path::new(LINUX_SYSFS_ENTRY_POINT).exists() {
-        return Err(Error::Internal(ErrorKind::EntryPointNotFound));
+        // Fall back to UNIX /dev/mem if possible.
+        if !path::Path::new(DEV_MEM).exists() {
+            // Nothing to do.
+            return Err(Error::Internal(ErrorKind::EntryPointNotFound));
+        }
+
+        return dev_mem_stream();
     }
 
     let entry_point = fs::File::open(LINUX_SYSFS_ENTRY_POINT).map_err(Error::Io)?;
     let dmi = fs::File::open(LINUX_SYSFS_DMI).map_err(Error::Io)?;
 
-    Ok((parse_entry_point(entry_point)?, Box::new(dmi)))
+    let structures = Decoder::new(dmi).decode()?;
+
+    Ok((parse_entry_point(entry_point)?, structures))
+}
+
+fn dev_mem_stream() -> Result<(EntryPointType, Vec<Structure>)> {
+    let mut mem = fs::File::open(DEV_MEM).map_err(Error::Io)?;
+
+    // Begin searching for the entry point at the location specified in the
+    // SMBIOS specification.
+    mem.seek(io::SeekFrom::Start(START_ADDRESS))
+        .map_err(Error::Io)?;
+
+    let address = find_entry_point(&mem)?;
+
+    // Seek to where the entry point is.
+    mem.seek(io::SeekFrom::Start(address)).map_err(Error::Io)?;
+
+    // Discover the SMBIOS table location.
+    let entry_point = parse_entry_point(&mem)?;
+
+    let (table_address, table_size) = match &entry_point {
+        EntryPointType::Bits32(ep) => ep.table(),
+        EntryPointType::Bits64(ep) => ep.table(),
+        _ => {
+            return Err(Error::Internal(ErrorKind::InvalidEntryPoint));
+        }
+    };
+
+    // Seek to the start of the SMBIOS stream and decode it.
+    mem.seek(io::SeekFrom::Start(table_address as u64))
+        .map_err(Error::Io)?;
+
+    let structures = Decoder::new(mem.take(table_size as u64)).decode()?;
+
+    Ok((entry_point, structures))
+}
+
+const START_ADDRESS: u64 = 0x000f_0000;
+const PARAGRAPH_SIZE: u64 = 16;
+
+fn find_entry_point<T: Read>(mut mem: T) -> Result<u64> {
+    let mut buf = [0; PARAGRAPH_SIZE as usize];
+
+    let start = START_ADDRESS;
+    let end = 0x000f_ffff;
+
+    let mut addr = start;
+    loop {
+        if addr >= end {
+            break;
+        }
+
+        mem.read_exact(&mut buf).map_err(Error::Io)?;
+
+        if let [b'_', b'S', b'M'] = buf[0..3] {
+            return Ok(addr);
+        }
+
+        addr += PARAGRAPH_SIZE;
+    }
+
+    Err(Error::Internal(ErrorKind::EntryPointNotFound))
 }
 
 /// Indicates the type of data contained within an SMBIOS structure.
@@ -589,6 +657,32 @@ mod tests {
         ];
 
         assert_eq!(want, got);
+    }
+
+    #[test]
+    fn find_entry_point_not_found() {
+        // Paragraphs are 16 bytes each.
+        let mem = io::Cursor::new(&[0xff; 32]);
+
+        find_entry_point(mem).expect_err("expected entry point not found error");
+    }
+
+    #[test]
+    fn find_entry_point_ok() {
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        let mem = io::Cursor::new(&[
+            // Paragraphs are 16 bytes each.
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+            // Entry point in second paragraph.
+            b'_', b'S', b'M', 0xff, 0xff, 0xff, 0xff, 0xff,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        ]);
+
+        let address = find_entry_point(mem).expect("expected valid entry point address");
+
+        // Table address is one paragraph after start address.
+        assert_eq!(address, START_ADDRESS + PARAGRAPH_SIZE);
     }
 
     fn unwrap_structure(buf: &[u8]) -> Structure {
