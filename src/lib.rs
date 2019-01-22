@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn entry_point_32bit_ok() {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
+        #[rustfmt::skip]
         let cursor = io::Cursor::new(vec![
             b'_', b'S', b'M', b'_',
             0xa4,
@@ -607,7 +607,7 @@ mod tests {
     fn decode_structure_multiple_ok() {
         // Thanks, reddit user coder543!
         // https://old.reddit.com/r/rust/comments/9jhbtw/rustfmts_handling_of_long_vec_literals/e6rh1uo/
-        #[cfg_attr(rustfmt, rustfmt_skip)]
+        #[rustfmt::skip]
         let got = unwrap_structures(&[
             0x00, 0x05, 0x01, 0x00,
             0xff,
@@ -669,7 +669,7 @@ mod tests {
 
     #[test]
     fn find_entry_point_ok() {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
+        #[rustfmt::skip]
         let mem = io::Cursor::new(&[
             // Paragraphs are 16 bytes each.
             0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
