@@ -4,7 +4,7 @@ extern crate smbios;
 use byteorder::{ByteOrder, LE};
 use smbios::{EntryPoint, EntryPointType};
 
-fn main() -> Result<(), Box<std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (entry_point, structures) = smbios::stream()?;
 
     match entry_point {
