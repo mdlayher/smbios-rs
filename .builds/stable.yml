@@ -2,7 +2,7 @@ image: archlinux
 packages:
   - rustup
 sources:
-  - https://github.com/mdlayher/monkey-rs
+  - https://github.com/mdlayher/smbios-rs
 tasks:
   - build: |
       rustup install stable
@@ -12,7 +12,7 @@ tasks:
       rustup --version
       rustup component add rustfmt
       rustup component add clippy
-      cd monkey-rs/
+      cd smbios-rs/
       cargo fmt -- --check
       cargo clippy --all-targets --all-features -- -D warnings
       cargo test
