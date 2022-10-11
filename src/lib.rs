@@ -570,6 +570,15 @@ mod tests {
     }
 
     #[test]
+    fn decode_structure_header_only_err() {
+        let got = unwrap_structure_result(&[127, 0x00, 0x01, 0x00, 0x00, 0x00]);
+
+        let want = Err(Error::Internal(Errorkind::InvalidEntryPoint));
+
+        assert_eq!(want, got);
+    }
+
+    #[test]
     fn decode_structure_no_strings_ok() {
         let got = unwrap_structure(&[127, 0x06, 0x01, 0x00, 0x01, 0x02, 0x00, 0x00]);
 
@@ -703,5 +712,13 @@ mod tests {
         let mut decoder = Decoder::new(cursor);
 
         decoder.decode().unwrap()
+    }
+
+    fn unwrap_structures_result(buf: &[u8]) -> Result<Vec<Structure>> {
+        let cursor = io::Cursor::new(buf);
+
+        let mut decoder = Decoder::new(cursor);
+
+        decoder.decode()
     }
 }
