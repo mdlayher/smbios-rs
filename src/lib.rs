@@ -272,7 +272,7 @@ fn find_entry_point<T: Read>(mut mem: T) -> Result<u64> {
 }
 
 /// Indicates the type of data contained within an SMBIOS structure.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Header {
     pub header_type: u8,
     pub length: u8,
@@ -290,7 +290,7 @@ fn parse_header(buf: [u8; 4]) -> Header {
 
 /// Contains a single SMBIOS structure which can be interpreted using the SMBIOS
 /// specification.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Structure {
     pub header: Header,
     pub formatted: Vec<u8>,
@@ -339,7 +339,7 @@ impl EntryPoint for Bits32 {
 }
 
 /// Contains the information found in a 32-bit SMBIOS entry point.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Bits32 {
     pub checksum: u8,
     pub length: u8,
@@ -419,7 +419,7 @@ impl EntryPoint for Bits64 {
 }
 
 /// Contains the information found in a 64-bit SMBIOS entry point.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Bits64 {
     pub checksum: u8,
     pub length: u8,
