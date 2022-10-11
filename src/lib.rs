@@ -571,11 +571,9 @@ mod tests {
 
     #[test]
     fn decode_structure_header_only_err() {
-        let got = unwrap_structure_result(&[127, 0x00, 0x01, 0x00, 0x00, 0x00]);
+        let got = unwrap_structures_result(&[127, 0x00, 0x01, 0x00, 0x00, 0x00]);
 
-        let want = Err(Error::Internal(Errorkind::InvalidEntryPoint));
-
-        assert_eq!(want, got);
+        assert!(got.is_err());
     }
 
     #[test]
