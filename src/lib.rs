@@ -105,6 +105,9 @@ impl<T: Read> Decoder<T> {
         loop {
             self.stream.read_exact(&mut header_buf).map_err(Error::Io)?;
             let header = parse_header(header_buf);
+            if header.length < 4 {
+                return Err(Error::Internal(ErrorKind::InvalidEntryPoint));
+            }
 
             // Formatted section is indicated length minus size of the header.
             let mut formatted = vec![0; header.length as usize - 4];
@@ -269,7 +272,7 @@ fn find_entry_point<T: Read>(mut mem: T) -> Result<u64> {
 }
 
 /// Indicates the type of data contained within an SMBIOS structure.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Header {
     pub header_type: u8,
     pub length: u8,
@@ -287,7 +290,7 @@ fn parse_header(buf: [u8; 4]) -> Header {
 
 /// Contains a single SMBIOS structure which can be interpreted using the SMBIOS
 /// specification.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Structure {
     pub header: Header,
     pub formatted: Vec<u8>,
@@ -336,7 +339,7 @@ impl EntryPoint for Bits32 {
 }
 
 /// Contains the information found in a 32-bit SMBIOS entry point.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Bits32 {
     pub checksum: u8,
     pub length: u8,
@@ -416,7 +419,7 @@ impl EntryPoint for Bits64 {
 }
 
 /// Contains the information found in a 64-bit SMBIOS entry point.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Bits64 {
     pub checksum: u8,
     pub length: u8,
@@ -567,6 +570,13 @@ mod tests {
     }
 
     #[test]
+    fn decode_structure_header_only_err() {
+        let got = unwrap_structures_result(&[127, 0x00, 0x01, 0x00, 0x00, 0x00]);
+
+        assert!(got.is_err());
+    }
+
+    #[test]
     fn decode_structure_no_strings_ok() {
         let got = unwrap_structure(&[127, 0x06, 0x01, 0x00, 0x01, 0x02, 0x00, 0x00]);
 
@@ -700,5 +710,13 @@ mod tests {
         let mut decoder = Decoder::new(cursor);
 
         decoder.decode().unwrap()
+    }
+
+    fn unwrap_structures_result(buf: &[u8]) -> Result<Vec<Structure>> {
+        let cursor = io::Cursor::new(buf);
+
+        let mut decoder = Decoder::new(cursor);
+
+        decoder.decode()
     }
 }
