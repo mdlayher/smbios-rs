@@ -105,6 +105,9 @@ impl<T: Read> Decoder<T> {
         loop {
             self.stream.read_exact(&mut header_buf).map_err(Error::Io)?;
             let header = parse_header(header_buf);
+            if header.length < 4 {
+                return Err(Error::Internal(ErrorKind::InvalidEntryPoint));
+            }
 
             // Formatted section is indicated length minus size of the header.
             let mut formatted = vec![0; header.length as usize - 4];
